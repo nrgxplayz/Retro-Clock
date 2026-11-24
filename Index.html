@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Retro Desk Clock</title>
+<style>
+  @font-face {
+    font-family: 'DSEG7';
+    src: url('https://cdn.jsdelivr.net/npm/dseg@0.46.0/fonts/DSEG7-Classic/DSEG7Classic-Bold.woff2') format('woff2');
+  }
+  :root { --colour: #FF3B30; --level: 0.8; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; background: #000;
+    font-family: 'DSEG7', 'Courier New', monospace;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none; overflow: hidden;
+  }
+  #stage {
+    height: 100%; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: var(--colour);
+    opacity: calc(0.12 + var(--level) * 0.88);
+    text-shadow: 0 0 18px var(--colour);
+  }
+  #clock { font-size: min(26vw, 38vh); line-height: 1; }
+  #date  { font-size: min(5vw, 6vh); margin-top: 2vh; }
+  #weather { font-size: min(5vw, 6vh); margin-top: 2vh; font-family: 'Courier New', monospace; font-weight: bold; }
+  #panel {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    background: rgba(20,20,20,0.92); color: #fff;
+    padding: 18px 20px calc(18px + env(safe-area-inset-bottom));
+    font-family: Arial, sans-serif; display: none;
+  }
+  #panel label { display: block; margin: 10px 0 6px; font-size: 15px; }
+  #panel input[type=range] { width: 100%; }
+  .swatches { display: flex; gap: 10px; }
+  .swatches button {
+    flex: 1; height: 46px; border: 2px solid #555; border-radius: 10px;
+  }
+  .row { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
+  .hint { font-size: 12px; color: #aaa; margin-top: 12px; }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="clock">12:00</div>
+  <div id="date"></div>
+  <div id="weather"></div>
+</div>
+
+<div id="panel">
+  <label for="bright">Brightness</label>
+  <input id="bright" type="range" min="0" max="100" value="80">
+
+  <label>Colour</label>
+  <div class="swatches">
+    <button data-c="#FF3B30" style="background:#FF3B30" aria-label="Red"></button>
+    <button data-c="#30FF5A" style="background:#30FF5A" aria-label="Green"></button>
+    <button data-c="#FFB000" style="background:#FFB000" aria-label="Amber"></button>
+    <button data-c="#22E5FF" style="background:#22E5FF" aria-label="Cyan"></button>
+    <button data-c="#FFFFFF" style="background:#FFFFFF" aria-label="White"></button>
+  </div>
+
+  <div class="row">
+    <span>24-hour clock</span>
+    <input id="h24" type="checkbox">
+  </div>
+  <div class="hint">Tap the clock to hide this panel.</div>
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var root = document.documentElement;
+
+  // ---------- saved settings ----------
+  var settings = { colour: '#FF3B30', level: 80, h24: false };
+  try {
+    var saved = JSON.parse(localStorage.getItem('retroClock'));
+    if (saved) settings = Object.assign(settings, saved);
+  } catch (e) {}
+  function save() {
+    try { localStorage.setItem('retroClock', JSON.stringify(settings)); } catch (e) {}
+  }
+
+  function applyStyle() {
+    root.style.setProperty('--colour', settings.colour);
+    root.style.setProperty('--level', settings.level / 100);
+    $('bright').value = settings.level;
+    $('h24').checked = settings.h24;
+  }
+
+  // ---------- clock ----------
+  function tick() {
+    var now = new Date();
+    var h = now.getHours();
+    var m = ('0' + now.getMinutes()).slice(-2);
+    if (!settings.h24) { h = h % 12; if (h === 0) h = 12; }
+    else { h = ('0' + h).slice(-2); }
+    $('clock').textContent = h + ':' + m;
+    $('date').textContent = now.toLocaleDateString(undefined, {
+      weekday: 'short', day: 'numeric', month: 'short'
+    }).toUpperCase();
+  }
+  setInterval(tick, 1000);
+
+  // ---------- controls ----------
+  $('stage').addEventListener('click', function () {
+    var p = $('panel');
+    p.style.display = (p.style.display === 'block') ? 'none' : 'block';
+  });
+  $('bright').addEventListener('input', function (e) {
+    settings.level = +e.target.value; applyStyle(); save();
+  });
+  $('h24').addEventListener('change', function (e) {
+    settings.h24 = e.target.checked; save(); tick();
+  });
+  var sw = document.querySelectorAll('.swatches button');
+  for (var i = 0; i < sw.length; i++) {
+    sw[i].addEventListener('click', function () {
+      settings.colour = this.getAttribute('data-c'); applyStyle(); save();
+    });
+  }
+
+  // ---------- keep the screen awake ----------
+  var lock = null;
+  function keepAwake() {
+    if ('wakeLock' in navigator) {
+      navigator.wakeLock.request('screen').then(function (l) { lock = l; }).catch(function () {});
+    }
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') keepAwake();
+  });
+  document.addEventListener('click', function once() {
+    keepAwake();
+    document.removeEventListener('click', once);
+  });
+  keepAwake();
+
+  // ---------- weather (Celsius, Open-Meteo, no key needed) ----------
+  var labels = {
+    0: 'CLEAR', 1: 'PARTLY CLOUDY', 2: 'PARTLY CLOUDY', 3: 'OVERCAST',
+    45: 'FOG', 48: 'FOG', 51: 'DRIZZLE', 53: 'DRIZZLE', 55: 'DRIZZLE',
+    61: 'RAIN', 63: 'RAIN', 65: 'RAIN', 71: 'SNOW', 73: 'SNOW', 75: 'SNOW',
+    80: 'SHOWERS', 81: 'SHOWERS', 82: 'SHOWERS', 95: 'STORM', 96: 'STORM', 99: 'STORM'
+  };
+  function loadWeather(lat, lon) {
+    var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat +
+      '&longitude=' + lon + '&current=temperature_2m,weather_code&temperature_unit=celsius';
+    fetch(url)
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var t = Math.round(d.current.temperature_2m);
+        var label = labels[d.current.weather_code] || '';
+        $('weather').textContent = t + '\u00B0C ' + label;
+      })
+      .catch(function () {
+        if (!$('weather').textContent) $('weather').textContent = 'WEATHER OFFLINE';
+      });
+  }
+  function getWeather() {
+    if (!navigator.geolocation) { $('weather').textContent = 'NO LOCATION'; return; }
+    navigator.geolocation.getCurrentPosition(
+      function (pos) { loadWeather(pos.coords.latitude, pos.coords.longitude); },
+      function () { $('weather').textContent = 'NO LOCATION'; },
+      { maximumAge: 600000, timeout: 15000 }
+    );
+  }
+  getWeather();
+  setInterval(getWeather, 15 * 60 * 1000);
+
+  applyStyle();
+  tick();
+})();
+</script>
+</body>
+</html>
