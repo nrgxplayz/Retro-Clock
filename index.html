@@ -27,7 +27,8 @@
     text-shadow: 0 0 18px var(--colour);
   }
   #clock { font-size: min(26vw, 38vh); line-height: 1; }
-  #date  { font-size: min(5vw, 6vh); margin-top: 2vh; }
+  #date  { font-size: min(5vw, 6vh); margin-top: 2vh; font-family: 'Courier New', monospace; font-weight: bold; }
+  #ampm  { font-size: min(6vw, 7vh); margin-top: 1vh; font-family: 'Courier New', monospace; font-weight: bold; }
   #weather { font-size: min(5vw, 6vh); margin-top: 2vh; font-family: 'Courier New', monospace; font-weight: bold; }
   #panel {
     position: fixed; left: 0; right: 0; bottom: 0;
@@ -49,6 +50,7 @@
 
 <div id="stage">
   <div id="clock">12:00</div>
+  <div id="ampm"></div>
   <div id="date"></div>
   <div id="weather"></div>
 </div>
@@ -97,16 +99,18 @@
 
   // ---------- clock ----------
   function tick() {
-    var now = new Date();
-    var h = now.getHours();
-    var m = ('0' + now.getMinutes()).slice(-2);
-    if (!settings.h24) { h = h % 12; if (h === 0) h = 12; }
-    else { h = ('0' + h).slice(-2); }
-    $('clock').textContent = h + ':' + m;
-    $('date').textContent = now.toLocaleDateString(undefined, {
-      weekday: 'short', day: 'numeric', month: 'short'
-    }).toUpperCase();
-  }
+  var now = new Date();
+  var h = now.getHours();
+  var m = ('0' + now.getMinutes()).slice(-2);
+  var suffix = h >= 12 ? 'PM' : 'AM';
+  if (!settings.h24) { h = h % 12; if (h === 0) h = 12; }
+  else { h = ('0' + h).slice(-2); }
+  $('clock').textContent = h + ':' + m;
+  $('ampm').textContent = settings.h24 ? '' : suffix;
+  $('date').textContent = now.toLocaleDateString(undefined, {
+    weekday: 'short', day: 'numeric', month: 'short'
+  }).toUpperCase();
+}
   setInterval(tick, 1000);
 
   // ---------- controls ----------
